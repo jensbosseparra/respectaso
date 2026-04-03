@@ -14,6 +14,18 @@ RespectASO helps iOS developers research App Store keywords privately. Download 
 
 ---
 
+## Quick Start (Development)
+
+```bash
+# Install just (if not already installed)
+brew install just
+
+# Start the backend
+just backend
+```
+
+This runs migrations and starts the Django dev server. Open the URL printed in the terminal to inspect the app.
+
 ## Why RespectASO?
 
 Most ASO tools require paid subscriptions, API keys, and send your keyword research to their servers. RespectASO takes a different approach:
@@ -30,89 +42,31 @@ Most ASO tools require paid subscriptions, API keys, and send your keyword resea
 |---------|-------------|
 | **Keyword Popularity** | Estimated popularity scores (1–100) derived from a 6-signal model analyzing iTunes Search competitor data |
 | **Difficulty Score** | 7 weighted sub-scores (rating volume, dominant players, rating quality, market age, publisher diversity, app count, content relevance) with ranking tier analysis |
-| **Ranking Tiers** | Separate difficulty analysis for Top 5, Top 10, and Top 20 positions — because breaking into the top 5 is different from reaching the top 20 |
+| **Ranking Tiers** | Separate difficulty analysis for Top 5, Top 10, and Top 20 positions |
 | **Download Estimates** | Estimated daily downloads per ranking position based on search volume, tap-through rates, and conversion rates |
 | **Competitor Analysis** | See the top 10 apps ranking for each keyword with ratings, reviews, genre, release date, and direct App Store links |
-| **Country Opportunity Finder** | Scan up to 30 App Store regions at once to find which countries offer the best ranking opportunities for your keyword |
+| **Country Opportunity Finder** | Scan up to 30 App Store regions at once to find which countries offer the best ranking opportunities |
 | **Multi-Keyword Search** | Research up to 20 keywords at once (comma-separated) |
 | **Multi-Country Search** | Search the same keyword across multiple countries simultaneously |
 | **App Rank Tracking** | Add your apps and see where you rank for each keyword alongside competitor data |
 | **Search History** | Browse past keyword research with sorting, filtering, and expandable detail views |
 | **CSV Export** | Export your keyword research data for use in spreadsheets |
-| **ASO Targeting Advice** | Automatic keyword classification (Sweet Spot, Hidden Gem, Low Volume, Avoid, etc.) based on popularity vs. difficulty |
+| **ASO Targeting Advice** | Automatic keyword classification (Sweet Spot, Hidden Gem, Low Volume, Avoid, etc.) |
 
-## Quick Start
-
-### 1. Download
+## Download
 
 **→ [Download RespectASO.dmg](https://github.com/respectlytics/respectaso/releases/latest)** (macOS 12+)
 
-### 2. Install
-
-Open the `.dmg` and drag **RespectASO** into your **Applications** folder.
-
-### 3. Launch
-
-Open RespectASO from Applications (or Spotlight: ⌘ Space → "RespectASO"). The app window opens automatically — type a keyword, select a country, and click Search.
-
-> **First launch:** If macOS shows a security dialog, right-click the app → Open → Open. This is only needed once — the app is code-signed and notarized by Apple.
-
-### Updating
-
-When an update is available, a banner appears on the Dashboard with release notes and a **Download Update** button. Download the new `.dmg`, drag to Applications (replace the old version), and relaunch. Your data is preserved — it lives in `~/Library/Application Support/RespectASO/`, separate from the app bundle.
-
-### Data Location
-
-Your keywords, search history, and settings are stored at:
-
-```
-~/Library/Application Support/RespectASO/
-```
-
-This data survives app updates and deletions. Delete this folder only if you want a completely fresh start.
+Open the `.dmg` and drag **RespectASO** into your **Applications** folder. Your data is stored at `~/Library/Application Support/RespectASO/` and survives app updates.
 
 <details>
-<summary><strong>🐳 Docker (legacy)</strong></summary>
-
-Docker was the original distribution method. While still supported, we recommend switching to the native Mac app for a simpler experience.
-
-#### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) installed and running
-
-#### Install via Docker
+<summary><strong>Docker (legacy)</strong></summary>
 
 ```bash
 git clone https://github.com/respectlytics/respectaso.git
 cd respectaso
 docker compose up -d
-```
-
-Open **[http://localhost](http://localhost)** in your browser.
-
-#### Updating (Docker)
-
-```bash
-cd respectaso
-git pull
-docker compose down
-docker compose build --no-cache
-docker compose up -d
-```
-
-#### Migrating from Docker to Native App
-
-Your existing data carries over. Run this one-time migration:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/respectlytics/respectaso/main/desktop/migrate-from-docker.sh | bash
-```
-
-Then install the native app and verify your data is intact. Once confirmed:
-
-```bash
-docker compose down     # Stop the container
-docker compose down -v  # Also remove the volume (only after confirming native app works)
+# Open http://localhost
 ```
 
 </details>
@@ -148,71 +102,58 @@ A 7-factor weighted system that estimates how hard it is to rank:
 | App count | 10% | Total number of relevant results |
 | Content relevance | 10% | How well competitors match the keyword |
 
-**Interpretation:** Very Easy (&lt;16) · Easy (16–35) · Moderate (36–55) · Hard (56–75) · Very Hard (76–90) · Extreme (91+)
+For the complete algorithm reference with every formula, calibration band, and interpolation method, see [docs/iOS_KEYWORD_VOLUME.md](docs/iOS_KEYWORD_VOLUME.md).
 
-### Download Estimates
+## Project Structure
 
-A 3-stage pipeline estimates daily downloads per ranking position:
-
-1. **Popularity → Daily Searches** — piecewise-linear mapping calibrated against real App Store observations
-2. **Position → Tap-Through Rate** — power-law decay from position #1 (30%) to position #20 (0.06%)
-3. **Tap → Install Conversion** — range of 35%–55% for free apps
-
-Results are shown as conservative–optimistic ranges per position, with tier breakdowns for Top 5, Top 6–10, and Top 11–20.
-
-For more details, visit the **Methodology** page inside the app.
-
-## Configuration
-
-<details>
-<summary><strong>Custom Local Domain (Docker only)</strong></summary>
-
-If running via Docker, you can use a cleaner URL. Add this to your `/etc/hosts` file:
-
-```bash
-sudo sh -c 'echo "127.0.0.1  respectaso.private" >> /etc/hosts'
 ```
+aso/
+  services.py       # Core engine: all scoring algorithms (2,068 lines)
+  models.py          # Database models: App, Keyword, SearchResult
+  views.py           # HTTP handlers (HTML pages + JSON API endpoints)
+  scheduler.py       # Background auto-refresh daemon
+  forms.py           # Django form validation
+  templates/aso/     # Server-rendered UI (Django templates + Tailwind + vanilla JS)
+  templatetags/      # Custom template filters
+  migrations/        # Database schema evolution
 
-Then access the tool at **[http://respectaso.private](http://respectaso.private)**
-
-The `.private` TLD is reserved by [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and avoids conflicts with macOS mDNS resolution (unlike `.local`).
-
-</details>
+core/                # Django project config (settings, urls, wsgi)
+desktop/             # Native macOS app wrapper (pywebview + PyInstaller)
+static/              # Favicons and logos
+docs/                # Documentation
+```
 
 ## Tech Stack
 
-- **Python 3.12** + **Django 5.1**
-- **pywebview** — native macOS WebKit window
+- **Python 3.12** + **Django 5.1** — backend + ORM
 - **SQLite** — local single-user database
-- **wsgiref** — built-in Python WSGI server
-- **WhiteNoise** — efficient static file serving
-- **Tailwind CSS** (CDN) — dark theme UI
-- **PyInstaller** — macOS `.app` bundle
+- **pywebview** — native macOS WebKit window
+- **Tailwind CSS** (CDN) — dark theme UI (server-rendered, no JS framework)
+- **iTunes Search API** — only external data source (public, no auth)
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [iOS Keyword Volume & Algorithms](docs/iOS_KEYWORD_VOLUME.md) | Complete reference for all scoring algorithms, signals, weights, formulas, and external trend data sources |
+| [Trend Signals Roadmap](docs/TREND_SIGNALS_ROADMAP.md) | Modular architecture for 17 external trend data sources with API docs, pricing, and implementation plans |
+| [Headless Migration Guide](docs/HEADLESS_MIGRATION.md) | How to extract the core engine and integrate into a FastAPI + PostgreSQL project |
+| [Security Policy](docs/SECURITY.md) | Vulnerability reporting and security design principles |
+| [Contributing Guide](docs/CONTRIBUTING.md) | How to submit bug reports, feature requests, and pull requests |
 
 ## Privacy
 
 RespectASO is designed with privacy as a core principle:
 
-- **100% local** — the tool runs entirely on your machine as a native app
+- **100% local** — the tool runs entirely on your machine
 - **No accounts** — no registration, no login, no user tracking
 - **No telemetry** — zero analytics, zero phone-home, zero data collection
-- **No API keys** — uses only the public iTunes Search API (no credentials required)
-- **No third-party services** — all API calls go directly from your machine to Apple's public API
-- **Your data stays yours** — keyword research, competitor analysis, and search history never leave your network
-
-We built RespectASO because we believe developers should be able to research keywords without handing their competitive intelligence to a third party.
+- **No API keys** — uses only the public iTunes Search API
+- **Your data stays yours** — keyword research never leaves your network
 
 ## License
 
 [AGPL-3.0](LICENSE) — free to use, modify, and distribute. If you modify and deploy RespectASO as a service, you must share your changes under the same license.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
 ## Contact
 
@@ -220,4 +161,4 @@ See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
 
 ---
 
-**Built by [Respectlytics](https://respectlytics.com/?utm_source=respectaso&utm_medium=readme&utm_campaign=oss)** — Privacy-focused mobile analytics for iOS & Android. We help developers avoid collecting personal data in the first place.
+**Built by [Respectlytics](https://respectlytics.com/?utm_source=respectaso&utm_medium=readme&utm_campaign=oss)** — Privacy-focused mobile analytics for iOS & Android.
