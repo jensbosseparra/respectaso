@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.db import models
-from django.db.models import Manager
+from django.db.models import Manager, Min
 from django.utils import timezone
 
 
@@ -232,3 +232,83 @@ class SearchResult(models.Model):
             else:
                 return ("🔴", "Very Competitive", "bg-red-900/20 text-red-300 border-red-500/20",
                         "Dominated by established apps. Target easier keywords first.")
+
+
+class TrendSignal(models.Model):
+    """
+    A single trend data point collected from an external signal source.
+
+    Each row represents one keyword observed in one source on one day.
+    The shared table lets us correlate signals across sources — e.g.
+    "OpenClaw appeared on Google Trends AND Reddit within 48 hours".
+    """
+
+    SOURCE_CHOICES = [
+        ("google_trends", "Google Trends"),
+        ("x_twitter", "X / Twitter"),
+        ("reddit", "Reddit"),
+        ("product_hunt", "Product Hunt"),
+        ("hacker_news", "Hacker News"),
+        ("gdelt_news", "GDELT News"),
+        ("wikipedia", "Wikipedia Pageviews"),
+        ("youtube", "YouTube"),
+        ("app_store", "App Store Native"),
+        ("tiktok", "TikTok"),
+        ("bluesky", "Bluesky"),
+        ("mastodon", "Mastodon"),
+        ("github", "GitHub Trending"),
+        ("steam", "Steam"),
+        ("podcast_index", "Podcast Index"),
+        ("newsapi", "NewsAPI"),
+        ("paid_aso", "Paid ASO Providers"),
+    ]
+
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES)
+    keyword = models.CharField(max_length=500)
+    raw_volume = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Source-specific metric (views, mentions, interest score)",
+    )
+    normalized_score = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="0.0-1.0 normalized intensity",
+    )
+    country = models.CharField(max_length=5, default="us")
+    metadata = models.JSONField(
+        default=dict,
+        help_text="Source-specific extra data (method, related queries, etc.)",
+    )
+    first_seen_at = models.DateTimeField(
+        help_text="UTC: when this keyword FIRST appeared in ANY source",
+    )
+    collected_at = models.DateTimeField(
+        help_text="UTC: when this data point was collected",
+    )
+    date_stamp = models.DateField(
+        help_text="UTC date for daily deduplication/aggregation",
+    )
+
+    class Meta:
+        unique_together = ("source", "keyword", "country", "date_stamp")
+        indexes = [
+            models.Index(fields=["keyword"], name="idx_trendsignal_keyword"),
+            models.Index(fields=["first_seen_at"], name="idx_trendsignal_first_seen"),
+            models.Index(fields=["source", "date_stamp"], name="idx_trendsignal_src_date"),
+        ]
+        ordering = ["-collected_at"]
+
+    def __str__(self):
+        return f"[{self.source}] {self.keyword} ({self.date_stamp})"
+
+    def save(self, *args, **kwargs):
+        """Auto-populate first_seen_at from the earliest existing record."""
+        if not self.first_seen_at:
+            earliest = (
+                TrendSignal.objects.filter(keyword=self.keyword)
+                .aggregate(earliest=Min("first_seen_at"))
+                .get("earliest")
+            )
+            self.first_seen_at = earliest or timezone.now()
+        super().save(*args, **kwargs)
